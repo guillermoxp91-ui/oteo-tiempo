@@ -127,6 +127,9 @@ def main():
                'res': 0.5, 'hecho': int(time.time())},
               open(OUT + '/manifest.json', 'w'))
     open(OUT + '/.nojekyll', 'w').close()
+    # La dirección propia de GitHub Pages: si no va en cada publicación,
+    # se pierde.
+    open(OUT + '/CNAME', 'w').write('tiempo.oteoapp.com\n')
     print('hecho en %.0f s, %.1f MB' % (time.time() - t0, total / 1e6))
 
 
