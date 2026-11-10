@@ -135,9 +135,9 @@ def main():
         '  Access-Control-Allow-Origin: *\n'
         '/manifest.json\n'
         '  Cache-Control: no-cache\n'
-        '/*/*.png\n'
-        '  Cache-Control: public, max-age=86400\n'
-        '/*/*.jpg\n'
+        # Las carpetas de cada pasada empiezan por el año («2026111018»);
+        # Cloudflare solo admite un comodín por regla.
+        '/20*\n'
         '  Cache-Control: public, max-age=86400\n')
     print('hecho en %.0f s, %.1f MB' % (time.time() - t0, total / 1e6))
 
