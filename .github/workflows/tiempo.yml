@@ -1,0 +1,36 @@
+name: Tiempo
+
+# Cada 6 horas, un rato después de que salga cada pasada del modelo
+# (00, 06, 12 y 18 UTC; tarda unas 4 horas en estar entera).
+on:
+  schedule:
+    - cron: '20 4,10,16,22 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [hacer.py, .github/workflows/tiempo.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tiempo
+  cancel-in-progress: true
+
+jobs:
+  hacer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q pygrib pillow numpy
+      - run: python3 hacer.py
+      # Se publica en la rama gh-pages, siempre con un solo cambio: así el
+      # repositorio no crece con cada pasada.
+      - run: |
+          cd datos
+          git init -q -b gh-pages
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "El tiempo, al día"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
