@@ -127,9 +127,18 @@ def main():
                'res': 0.5, 'hecho': int(time.time())},
               open(OUT + '/manifest.json', 'w'))
     open(OUT + '/.nojekyll', 'w').close()
-    # La dirección propia de GitHub Pages: si no va en cada publicación,
-    # se pierde.
-    open(OUT + '/CNAME', 'w').write('tiempo.oteoapp.com\n')
+    # Cloudflare Pages (tiempo.oteoapp.com): que la app pueda leerlas desde
+    # su página (CORS), el índice siempre fresco y las imágenes de cada
+    # pasada (que no cambian) guardadas en caché.
+    open(OUT + '/_headers', 'w').write(
+        '/*\n'
+        '  Access-Control-Allow-Origin: *\n'
+        '/manifest.json\n'
+        '  Cache-Control: no-cache\n'
+        '/*/*.png\n'
+        '  Cache-Control: public, max-age=86400\n'
+        '/*/*.jpg\n'
+        '  Cache-Control: public, max-age=86400\n')
     print('hecho en %.0f s, %.1f MB' % (time.time() - t0, total / 1e6))
 
 
