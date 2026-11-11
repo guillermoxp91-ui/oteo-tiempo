@@ -9,13 +9,20 @@ días enteros. Se guarda un mes hacia atrás.
   datos/obs/b/<pasada>-{r,x,n}.png   cada bloque de 6 h (para rehacer los días)
   datos/obs/d/<AAAAMMDD>-{r,x,n}.png cada día (UTC)
   datos/obs/t/<N>-{r,x,n}.png        los últimos N días juntos (1, 3, 7, 14, 21, 30)
-  datos/obs/manifest.json            {dias: [...], totales: [...], w, h, res, hecho}
+  datos/obs/i/<AAAAMMDD>-r.png       la lluvia de ese día medida por satélite
+                                     (IMERG, ver imerg.py; 255: sin dato)
+  datos/obs/manifest.json            {dias: [...], totales: [...], satelite: [...],
+                                      w, h, res, hecho}
 
   r: lluvia caída (gris): (x / 8)^2 mm  (hasta unos 1.000 mm)
   x, n: media de las máximas / mínimas (gris): x / 2 - 60 °C
 
 Mismas filas y columnas que la previsión: de norte (90°) a sur, desde la
 longitud 0 hacia el este, a medio grado (720 × 361).
+
+La lluvia de cada día es la de los satélites (IMERG) donde la hay; los
+días que aún no la tienen (los dos últimos, más o menos) y los sitios sin
+dato, la del modelo. «satelite» dice qué días la tienen.
 
 Los bloques ya hechos se recuperan de la publicación anterior (la carpeta
 datos/obs que deja el paso «Recuperar» del flujo); los que falten del
@@ -32,6 +39,7 @@ import numpy as np
 from PIL import Image
 
 import hacer
+import imerg
 
 OUT = os.path.join(hacer.OUT, 'obs')
 DAYS = 30
@@ -78,14 +86,24 @@ def temp_png(c):
     return Image.fromarray(hacer.byte((np.clip(c, -60, 67) + 60) * 2))
 
 
+def sat_png(mm):
+    v = np.where(np.isnan(mm), 255, np.minimum(254, np.sqrt(np.maximum(np.nan_to_num(mm), 0)) * 8))
+    return Image.fromarray(np.round(v).astype(np.uint8))
+
+
+def read_sat(path):
+    v = read(path)
+    return np.where(v >= 255, np.nan, (v / 8) ** 2)
+
+
 def read(path):
     return np.asarray(Image.open(path), dtype=np.float32)
 
 
 def main():
     t0 = time.time()
-    bdir, ddir, tdir = (os.path.join(OUT, x) for x in 'bdt')
-    for d in (bdir, ddir, tdir):
+    bdir, ddir, tdir, idir = (os.path.join(OUT, x) for x in 'bdti')
+    for d in (bdir, ddir, tdir, idir):
         os.makedirs(d, exist_ok=True)
     # Las pasadas del último mes cuyas 6 primeras horas ya han pasado.
     now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
@@ -134,21 +152,28 @@ def main():
     by_day = {}
     for n in have:
         by_day.setdefault(n[:8], []).append(n)
-    days = []
+    whole = [d for d, b in sorted(by_day.items()) if len(b) >= 4][-DAYS:]
+    satellite(idir, whole)
+    days, sat = [], []
     rain_d, max_d, min_d = {}, {}, {}
     for day, blocks in sorted(by_day.items()):
-        if len(blocks) < 4:
+        if day not in whole:
             continue
         # Lluvia: se vuelve a mm (cada bloque se guardó redondeado).
         r = sum((read('%s/%s-r.png' % (bdir, b)) / 8) ** 2 for b in blocks)
         x = np.max([read('%s/%s-x.png' % (bdir, b)) for b in blocks], axis=0) / 2 - 60
         n = np.min([read('%s/%s-n.png' % (bdir, b)) for b in blocks], axis=0) / 2 - 60
+        # Donde los satélites la midieron, esa.
+        ip = '%s/%s-r.png' % (idir, day)
+        if os.path.exists(ip):
+            m = read_sat(ip)
+            r = np.where(np.isnan(m), r, m)
+            sat.append(day)
         rain_png(r).save('%s/%s-r.png' % (ddir, day), optimize=True)
         temp_png(x).save('%s/%s-x.png' % (ddir, day), optimize=True)
         temp_png(n).save('%s/%s-n.png' % (ddir, day), optimize=True)
         rain_d[day], max_d[day], min_d[day] = r, x, n
         days.append(day)
-    days = days[-DAYS:]
     # Los últimos N días juntos: la lluvia sumada; las temperaturas, la
     # media de las máximas y de las mínimas.
     totals = []
@@ -163,11 +188,38 @@ def main():
         temp_png(np.mean([min_d[d] for d in sel], axis=0)).save(
             '%s/%d-n.png' % (tdir, k), optimize=True)
         totals.append(k)
-    json.dump({'dias': days, 'totales': totals, 'w': 720, 'h': 361,
+    json.dump({'dias': days, 'totales': totals, 'satelite': sat, 'w': 720, 'h': 361,
                'res': 0.5, 'hecho': int(time.time())},
               open(os.path.join(OUT, 'manifest.json'), 'w'))
-    print('pasado: %d días, totales %s, en %.0f s'
-          % (len(days), totals, time.time() - t0))
+    print('pasado: %d días (%d con satélite), totales %s, en %.0f s'
+          % (len(days), len(sat), totals, time.time() - t0))
+
+
+def satellite(idir, days):
+    """Baja la lluvia de los satélites de los días que aún no la tienen
+    (y quita la de los días que ya no se guardan)."""
+    for n in os.listdir(idir):
+        if n.split('-')[0] not in days:
+            os.remove(os.path.join(idir, n))
+    if not imerg.ready():
+        print('sin cuenta de Earthdata: la lluvia, solo la del modelo')
+        return
+    todo = [d for d in days if not os.path.exists('%s/%s-r.png' % (idir, d))]
+
+    def one(day):
+        try:
+            return day, imerg.day_rain(day)
+        except Exception as e:
+            print('satélite: sin', day, e, flush=True)
+            return day, None
+
+    got = 0
+    with ThreadPoolExecutor(4) as ex:
+        for day, mm in ex.map(one, sorted(todo, reverse=True)):
+            if mm is not None:
+                sat_png(mm).save('%s/%s-r.png' % (idir, day), optimize=True)
+                got += 1
+    print('satélite: %d días nuevos de %d que faltaban' % (got, len(todo)), flush=True)
 
 
 if __name__ == '__main__':

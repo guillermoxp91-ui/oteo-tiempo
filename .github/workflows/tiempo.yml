@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [hacer.py, pasado.py, .github/workflows/tiempo.yml]
+    paths: [hacer.py, pasado.py, imerg.py, .github/workflows/tiempo.yml]
 
 permissions:
   contents: write
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pip install -q pygrib pillow numpy
+      - run: pip install -q pygrib pillow numpy h5py
       - run: python3 hacer.py
       # Lo que ha pasado: se recuperan los bloques ya hechos de la
       # publicación anterior y se piden solo los que falten.
@@ -30,6 +30,16 @@ jobs:
         run: |
           git fetch -q --depth 1 origin gh-pages || exit 0
           git archive FETCH_HEAD obs/b | tar -x -C datos || true
+          git archive FETCH_HEAD obs/i | tar -x -C datos || true
+      # La cuenta de Earthdata (NASA), para la lluvia de los satélites.
+      - name: Cuenta de Earthdata
+        env:
+          U: ${{ secrets.EARTHDATA_USER }}
+          P: ${{ secrets.EARTHDATA_PASS }}
+        run: |
+          [ -n "$U" ] || exit 0
+          printf 'machine urs.earthdata.nasa.gov login %s password %s\n' "$U" "$P" > ~/.netrc
+          chmod 600 ~/.netrc
       - run: python3 pasado.py
       # Se publica en la rama gh-pages, siempre con un solo cambio: así el
       # repositorio no crece con cada pasada.
