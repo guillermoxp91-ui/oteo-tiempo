@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [hacer.py, .github/workflows/tiempo.yml]
+    paths: [hacer.py, pasado.py, .github/workflows/tiempo.yml]
 
 permissions:
   contents: write
@@ -24,6 +24,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: pip install -q pygrib pillow numpy
       - run: python3 hacer.py
+      # Lo que ha pasado: se recuperan los bloques ya hechos de la
+      # publicación anterior y se piden solo los que falten.
+      - name: Recuperar
+        run: |
+          git fetch -q --depth 1 origin gh-pages || exit 0
+          git archive FETCH_HEAD obs/b | tar -x -C datos || true
+      - run: python3 pasado.py
       # Se publica en la rama gh-pages, siempre con un solo cambio: así el
       # repositorio no crece con cada pasada.
       - run: |
