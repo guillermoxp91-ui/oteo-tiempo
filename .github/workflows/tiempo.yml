@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [hacer.py, pasado.py, imerg.py, .github/workflows/tiempo.yml]
+    paths: [hacer.py, europeo.py, pasado.py, imerg.py, .github/workflows/tiempo.yml]
 
 permissions:
   contents: write

@@ -96,7 +96,8 @@ def byte(a):
     return np.clip(np.rint(a), 0, 255).astype(np.uint8)
 
 
-def main():
+def gfs_main():
+    """La previsión del GFS (la de antes; de reserva si falla la europea)."""
     t0 = time.time()
     c = cycle()
     name = c.strftime('%Y%m%d%H')
@@ -126,6 +127,11 @@ def main():
     json.dump({'dir': name, 't0': epoch, 'n': HOURS + 1, 'w': 720, 'h': 361,
                'res': 0.5, 'hecho': int(time.time())},
               open(OUT + '/manifest.json', 'w'))
+    finish()
+    print('hecho en %.0f s, %.1f MB' % (time.time() - t0, total / 1e6))
+
+
+def finish():
     open(OUT + '/.nojekyll', 'w').close()
     # Cloudflare Pages (tiempo.oteoapp.com): que la app pueda leerlas desde
     # su página (CORS), el índice siempre fresco y las imágenes de cada
@@ -139,7 +145,15 @@ def main():
         # Cloudflare solo admite un comodín por regla.
         '/20*\n'
         '  Cache-Control: public, max-age=86400\n')
-    print('hecho en %.0f s, %.1f MB' % (time.time() - t0, total / 1e6))
+
+
+def main():
+    import europeo
+    try:
+        europeo.main()
+    except Exception as e:
+        print('el europeo ha fallado (%s): se usa el GFS' % e, flush=True)
+        gfs_main()
 
 
 if __name__ == '__main__':
