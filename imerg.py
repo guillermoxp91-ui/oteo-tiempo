@@ -31,11 +31,16 @@ def curl(url, out=None):
     # galleta: curl lo hace solo con -n (la cuenta de ~/.netrc), -L y las
     # galletas en un fichero.
     jar = os.path.join(tempfile.gettempdir(), 'earthdata-galletas')
-    cmd = ['curl', '-sSfL', '-n', '-c', jar, '-b', jar, '--retry', '2',
-           '-m', '300', url]
+    cmd = ['curl', '-sSfL', '-n', '-c', jar, '-b', jar, '--connect-timeout', '20',
+           '--speed-limit', '20000', '--speed-time', '60', '-m', '600', url]
     if out:
-        cmd += ['-o', out]
-    return subprocess.run(cmd, check=True, capture_output=True).stdout
+        # Para ver qué pasa si algo va mal: a dónde acabó y cuánto bajó.
+        cmd += ['-o', out, '-w', '%{http_code} %{size_download} B %{time_total} s %{url_effective}']
+    r = subprocess.run(cmd, capture_output=True)
+    if out:
+        print('satélite:', r.stdout.decode()[:300], r.stderr.decode()[:300], flush=True)
+    r.check_returncode()
+    return r.stdout
 
 
 _lists = {}

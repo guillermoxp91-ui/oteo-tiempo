@@ -46,6 +46,8 @@ DAYS = 30
 TOTALS = [1, 3, 7, 14, 21, 30]
 # Como mucho tantos bloques nuevos por vez (la primera, el mes entero).
 MAX_NEW = 130
+# Y días de lluvia de los satélites (cada uno, un fichero de la NASA).
+MAX_SAT = 10
 WANT = {
     'APCP:surface': 'r',
     'TMAX:2 m above ground': 'x',
@@ -205,6 +207,9 @@ def satellite(idir, days):
         print('sin cuenta de Earthdata: la lluvia, solo la del modelo')
         return
     todo = [d for d in days if not os.path.exists('%s/%s-r.png' % (idir, d))]
+    # Como mucho tantos por vez (lo más reciente primero); el resto, en las
+    # siguientes pasadas.
+    todo = sorted(todo, reverse=True)[:MAX_SAT]
 
     def one(day):
         try:
@@ -214,8 +219,8 @@ def satellite(idir, days):
             return day, None
 
     got = 0
-    with ThreadPoolExecutor(4) as ex:
-        for day, mm in ex.map(one, sorted(todo, reverse=True)):
+    with ThreadPoolExecutor(2) as ex:
+        for day, mm in ex.map(one, todo):
             if mm is not None:
                 sat_png(mm).save('%s/%s-r.png' % (idir, day), optimize=True)
                 got += 1
