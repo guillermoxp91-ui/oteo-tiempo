@@ -60,6 +60,8 @@ jobs:
                   i = feats.get(i, {}).get('parent')
               return False
           for p in feats.values():
+              if 'canar' in p['id'] or 'ceuta' in p['id']:
+                  print({k: v for k, v in p.items() if k != 'urls'})
               subs = p.get('iso3166-2') or []
               if p.get('iso3166-1:alpha2') or not subs or 'pbf' not in p.get('urls', {}):
                   continue
