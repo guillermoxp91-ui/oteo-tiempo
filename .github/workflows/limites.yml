@@ -1,0 +1,115 @@
+name: Límites
+
+# Municipios, provincias y regiones de cada país (de OpenStreetMap), para
+# que la app sepa dónde está sin preguntar a Nominatim. Cambian poco: se
+# rehacen cada tres meses o a mano (todos los países o solo los que se
+# pidan, por su código: «ES PT AD»).
+on:
+  schedule:
+    - cron: '0 3 1 */3 *'
+  workflow_dispatch:
+    inputs:
+      paises:
+        description: 'Códigos ISO separados por espacios (vacío = todos)'
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: limites
+
+jobs:
+  lista:
+    runs-on: ubuntu-latest
+    outputs:
+      extractos: ${{ steps.lista.outputs.extractos }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: lista
+        env:
+          PAISES: ${{ inputs.paises }}
+        run: |
+          curl -sfL -o index.json https://download.geofabrik.de/index-v1-nogeom.json
+          python3 - <<'PY'
+          import json, os
+          want = set(os.environ.get('PAISES', '').upper().split())
+          best = {}
+          for f in json.load(open('index.json'))['features']:
+              p = f['properties']
+              codes = p.get('iso3166-1:alpha2') or []
+              if not codes or 'pbf' not in p.get('urls', {}):
+                  continue
+              for c in codes:
+                  if want and c not in want:
+                      continue
+                  old = best.get(c)
+                  if old is None or len(codes) < len(old[1]):
+                      best[c] = (p['id'], codes, p['urls']['pbf'])
+          ext = {}
+          for c, (i, codes, url) in best.items():
+              ext.setdefault(i, {'id': i, 'url': url, 'codes': []})['codes'].append(c)
+          todo = sorted(ext.values(), key=lambda e: e['id'])
+          json.dump({e['id']: e['codes'] for e in todo}, open('extractos.json', 'w'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as o:
+              o.write('extractos=' + json.dumps(todo) + '\n')
+          print(len(todo), 'extractos')
+          PY
+      - run: |
+          curl -sfL -o a0.geojson https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson
+          pip install -q shapely
+          python3 limites.py --paises a0.geojson paises.bin.gz
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view limites >/dev/null 2>&1 || gh release create limites --title "Límites administrativos" --notes "Municipios, provincias y regiones de OpenStreetMap (© colaboradores de OpenStreetMap, ODbL), y países de Natural Earth."
+          gh release upload limites paises.bin.gz --clobber
+
+  pais:
+    needs: lista
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        e: ${{ fromJson(needs.lista.outputs.extractos) }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt-get install -y -qq osmium-tool >/dev/null
+          pip install -q shapely
+      - run: |
+          curl -sfL -o pais.osm.pbf "${{ matrix.e.url }}"
+          osmium tags-filter -o limites.osm.pbf pais.osm.pbf r/boundary=administrative
+          rm pais.osm.pbf
+          osmium export limites.osm.pbf --geometry-types=polygon -f geojsonseq -o limites.geojsonseq
+          python3 limites.py limites.geojsonseq "${{ matrix.e.id }}.bin.gz"
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload limites "${{ matrix.e.id }}.bin.gz" --clobber
+
+  indice:
+    needs: [lista, pais]
+    if: always() && needs.lista.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          EXT: ${{ needs.lista.outputs.extractos }}
+        run: |
+          # El índice dice qué fichero corresponde a cada país (código ISO →
+          # extracto), con todos los que ya están publicados.
+          gh release download limites -R "${{ github.repository }}" -p indice.json || echo '{}' > indice.json
+          gh release view limites -R "${{ github.repository }}" --json assets -q '.assets[].name' > hay.txt
+          python3 - <<'PY'
+          import json, os
+          idx = json.load(open('indice.json'))
+          hay = set(open('hay.txt').read().split())
+          for e in json.loads(os.environ['EXT']):
+              if e['id'] + '.bin.gz' in hay:
+                  for c in e['codes']:
+                      idx[c] = e['id']
+          json.dump(dict(sorted(idx.items())), open('indice.json', 'w'), indent=0)
+          print(len(idx), 'países')
+          PY
+          gh release upload limites indice.json --clobber -R "${{ github.repository }}"
