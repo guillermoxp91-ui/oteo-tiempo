@@ -8,6 +8,7 @@ imágenes pequeñas del mundo entero a medio grado, una por hora y capa:
   datos/<pasada>/rNN.png       lluvia (gris):   (x / 40)^2 mm/h
   datos/<pasada>/sNN.png       nieve (gris):    (x / 40)^2 mm/h de agua
   datos/<pasada>/cNN.png       energía para tormentas (gris): x * 20 J/kg (CAPE)
+  datos/<pasada>/tNN.png       temperatura a 2 m (gris): x / 2 - 60 °C
 
 NN es la hora desde la pasada (00 a 48). Filas de norte (90°) a sur,
 columnas desde la longitud 0 hacia el este.
@@ -34,6 +35,7 @@ WANT = {
     'PRATE:surface': 'rain',
     'CSNOW:surface': 'snow',
     'CAPE:surface': 'cape',
+    'TMP:2 m above ground': 'temp',
 }
 
 
@@ -121,11 +123,13 @@ def gfs_main():
         Image.fromarray(byte(np.sqrt(np.maximum(snow, 0)) * 40)).save(
             '%s/s%02d.png' % (d, f), optimize=True)
         Image.fromarray(byte(cape / 20)).save('%s/c%02d.png' % (d, f), optimize=True)
+        Image.fromarray(byte((half(fl['temp']) - 273.15 + 60) * 2)).save(
+            '%s/t%02d.png' % (d, f), optimize=True)
     for n in os.listdir(d):
         total += os.path.getsize(os.path.join(d, n))
     epoch = int((c - dt.datetime(1970, 1, 1)).total_seconds())
     json.dump({'dir': name, 't0': epoch, 'n': HOURS + 1, 'w': 720, 'h': 361,
-               'res': 0.5, 'hecho': int(time.time())},
+               'res': 0.5, 'capas': 'wrsct', 'hecho': int(time.time())},
               open(OUT + '/manifest.json', 'w'))
     finish()
     print('hecho en %.0f s, %.1f MB' % (time.time() - t0, total / 1e6))

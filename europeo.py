@@ -32,7 +32,7 @@ import hacer
 BASE = 'https://ecmwf-forecasts.s3.eu-central-1.amazonaws.com'
 HOURS = hacer.HOURS
 STEPS = list(range(0, HOURS + 1, 3))
-WANT = ('10u', '10v', 'tprate', 'ptype', 'mucape')
+WANT = ('10u', '10v', 'tprate', 'ptype', 'mucape', '2t')
 
 
 class Missing(Exception):
@@ -117,7 +117,7 @@ def step(c, s):
     return s, out
 
 
-def write(d, f, u, v, rain, snow, cape):
+def write(d, f, u, v, rain, snow, cape, temp):
     """Las cuatro imágenes de una hora, como las del GFS (ver hacer.py)."""
     byte = hacer.byte
     zero = np.zeros_like(u)
@@ -133,6 +133,9 @@ def write(d, f, u, v, rain, snow, cape):
     Image.fromarray(byte(np.sqrt(np.maximum(snow, 0)) * 40)).save(
         '%s/s%02d.png' % (d, f), optimize=True)
     Image.fromarray(byte(cape / 20)).save('%s/c%02d.png' % (d, f), optimize=True)
+    # La temperatura a 2 m (de kelvin a °C), como las de lo que ha pasado.
+    Image.fromarray(byte((temp - 273.15 + 60) * 2)).save(
+        '%s/t%02d.png' % (d, f), optimize=True)
 
 
 def main():
@@ -165,12 +168,12 @@ def main():
                 return got[s0][p][k] * (1 - t) + got[s1][p][k] * t
             rain = at('tprate') * 3600  # mm/h
             write(out, f, at('10u'), at('10v'), rain,
-                  rain * got[near]['ptype'][k], at('mucape'))
+                  rain * got[near]['ptype'][k], at('mucape'), at('2t'))
     total = sum(os.path.getsize(os.path.join(r, n))
                 for r, _, ns in os.walk(d) for n in ns)
     epoch = int((c - dt.datetime(1970, 1, 1)).total_seconds())
     json.dump({'dir': name, 't0': epoch, 'n': HOURS + 1, 'w': 720, 'h': 361,
-               'res': 0.5, 'modelo': 'ECMWF',
+               'res': 0.5, 'modelo': 'ECMWF', 'capas': 'wrsct',
                'fino': {'dir': name + '/f', 'w': 1800, 'h': 901, 'res': 0.2},
                'hecho': int(time.time())},
               open(hacer.OUT + '/manifest.json', 'w'))
