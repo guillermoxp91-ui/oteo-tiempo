@@ -1,7 +1,7 @@
 """Límites administrativos de un país (de OpenStreetMap) para que la app
 sepa sin conexión en qué municipio, provincia y comunidad está un punto.
 
-  python3 limites.py límites.geojsonseq salida.bin.gz
+  python3 limites.py límites.geojsonseq [más.geojsonseq…] salida.bin.gz
   python3 limites.py --paises ne_admin0.geojson paises.bin.gz
 
 Formato (todo comprimido con gzip, enteros en little endian):
@@ -99,10 +99,16 @@ def write(path, items):
             f.write(it)
 
 
-def osm(src, dst):
-    items, levels = [], {}
-    with open(src) as f:
-        for line in f:
+def lines(srcs):
+    for src in srcs:
+        with open(src) as f:
+            yield from f
+
+
+def osm(srcs, dst):
+    items, levels, seen = [], {}, set()
+    if True:
+        for line in lines(srcs):
             line = line.strip().lstrip('\x1e')
             if not line:
                 continue
@@ -122,7 +128,9 @@ def osm(src, dst):
             except Exception:
                 continue
             item = encode(level, names_of(tags, name), geom)
-            if item:
+            # La misma zona puede venir en dos extractos.
+            if item and item not in seen:
+                seen.add(item)
                 items.append(item)
                 levels[level] = levels.get(level, 0) + 1
     write(dst, items)
@@ -148,4 +156,4 @@ if __name__ == '__main__':
     if sys.argv[1] == '--paises':
         paises(sys.argv[2], sys.argv[3])
     else:
-        osm(sys.argv[1], sys.argv[2])
+        osm(sys.argv[1:-1], sys.argv[-1])
