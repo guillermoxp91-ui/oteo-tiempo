@@ -48,7 +48,7 @@ jobs:
                       best[c] = (p['id'], codes, p['urls']['pbf'])
           ext = {}
           for c, (i, codes, url) in best.items():
-              ext.setdefault(i, {'id': i, 'urls': [url], 'codes': []})['codes'].append(c)
+              ext.setdefault(i, {'id': i.replace('/', '-'), 'urls': [url], 'codes': []})['codes'].append(c)
           # Trozos de un país que Geofabrik pone en otro sitio, sin código
           # de país en su índice.
           feats = {f['properties']['id']: f['properties'] for f in json.load(open('index.json'))['features']}
