@@ -52,7 +52,7 @@ jobs:
           # Trozos de un país que Geofabrik pone en otro sitio, sin código
           # de país en su índice.
           feats = {f['properties']['id']: f['properties'] for f in json.load(open('index.json'))['features']}
-          for c, extra in {'ES': ['canary-islands']}.items():
+          for c, extra in {'ES': ['canary-islands', 'ceuta']}.items():
               for x in extra:
                   if c in best and x in feats:
                       ext[best[c][0]]['urls'].append(feats[x]['urls']['pbf'])
