@@ -47,7 +47,7 @@ TOTALS = [1, 3, 7, 14, 21, 30]
 # Como mucho tantos bloques nuevos por vez (la primera, el mes entero).
 MAX_NEW = 130
 # Y días de lluvia de los satélites (cada uno, un fichero de la NASA).
-MAX_SAT = 10
+MAX_SAT = 31
 WANT = {
     'APCP:surface': 'r',
     'TMAX:2 m above ground': 'x',
