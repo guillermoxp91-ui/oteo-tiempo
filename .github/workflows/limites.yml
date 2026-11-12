@@ -91,7 +91,7 @@ jobs:
           k=0
           for u in $URLS; do
             k=$((k+1))
-            curl -sfL -o pais.osm.pbf "$u"
+            curl -sfL --retry 6 --retry-delay 60 --retry-all-errors -o pais.osm.pbf "$u"
             osmium tags-filter -o limites.osm.pbf pais.osm.pbf r/boundary=administrative --overwrite
             rm pais.osm.pbf
             osmium export limites.osm.pbf --geometry-types=polygon -f geojsonseq -o "limites$k.geojsonseq" --overwrite
