@@ -49,29 +49,13 @@ jobs:
           ext = {}
           for c, (i, codes, url) in best.items():
               ext.setdefault(i, {'id': i, 'urls': [url], 'codes': []})['codes'].append(c)
-          # Trozos de un país que Geofabrik pone en otro sitio (Canarias va
-          # con África): extractos sin país propio cuyas regiones son todas
-          # de ese país y que no están ya dentro de su extracto.
+          # Trozos de un país que Geofabrik pone en otro sitio, sin código
+          # de país en su índice.
           feats = {f['properties']['id']: f['properties'] for f in json.load(open('index.json'))['features']}
-          def inside(i, top):
-              while i:
-                  if i == top:
-                      return True
-                  i = feats.get(i, {}).get('parent')
-              return False
-          for p in feats.values():
-              if 'canar' in p['id'] or 'ceuta' in p['id']:
-                  print({k: v for k, v in p.items() if k != 'urls'})
-              subs = p.get('iso3166-2') or []
-              if p.get('iso3166-1:alpha2') or not subs or 'pbf' not in p.get('urls', {}):
-                  continue
-              cc = {s.split('-')[0] for s in subs}
-              if len(cc) != 1:
-                  continue
-              c = cc.pop()
-              if c in best and not inside(p['id'], best[c][0]) and not any(inside(p['id'], q) for q in feats if q != p['id'] and feats[q].get('iso3166-1:alpha2') == [c]):
-                  ext[best[c][0]]['urls'].append(p['urls']['pbf'])
-                  print('Además', p['id'], 'en', best[c][0])
+          for c, extra in {'ES': ['canary-islands']}.items():
+              for x in extra:
+                  if c in best and x in feats:
+                      ext[best[c][0]]['urls'].append(feats[x]['urls']['pbf'])
           todo = sorted(ext.values(), key=lambda e: e['id'])
           json.dump({e['id']: e['codes'] for e in todo}, open('extractos.json', 'w'))
           with open(os.environ['GITHUB_OUTPUT'], 'a') as o:
