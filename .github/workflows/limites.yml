@@ -1,7 +1,8 @@
 name: Límites
 
 # Municipios, provincias y regiones de cada país (de OpenStreetMap), para
-# que la app sepa dónde está sin preguntar a Nominatim. Cambian poco: se
+# que la app sepa dónde está sin preguntar a Nominatim, y sus lugares
+# (picos, pueblos, fuentes…) para no depender de Overpass. Cambian poco: se
 # rehacen cada tres meses o a mano (todos los países o solo los que se
 # pidan, por su código: «ES PT AD»).
 on:
@@ -89,17 +90,22 @@ jobs:
           URLS: ${{ join(matrix.e.urls, ' ') }}
         run: |
           k=0
+          FILTRO=$(python3 lugares.py --filtro)
           for u in $URLS; do
             k=$((k+1))
             curl -sfL --retry 6 --retry-delay 60 --retry-all-errors -o pais.osm.pbf "$u"
             osmium tags-filter -o limites.osm.pbf pais.osm.pbf r/boundary=administrative --overwrite
+            # Los lugares (lo que la app pedía a Overpass), para bajarlos una vez.
+            osmium tags-filter -o lugares.osm.pbf pais.osm.pbf $FILTRO --overwrite
             rm pais.osm.pbf
             osmium export limites.osm.pbf --geometry-types=polygon -f geojsonseq -o "limites$k.geojsonseq" --overwrite
+            osmium export lugares.osm.pbf -f geojsonseq -o "lugares$k.geojsonseq" --add-unique-id=type_id --overwrite
           done
           python3 limites.py limites*.geojsonseq "${{ matrix.e.id }}.bin.gz"
+          python3 lugares.py lugares*.geojsonseq "${{ matrix.e.id }}"
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload limites "${{ matrix.e.id }}.bin.gz" --clobber
+        run: gh release upload limites "${{ matrix.e.id }}.bin.gz" "${{ matrix.e.id }}.cerca.gz" "${{ matrix.e.id }}.lejos.gz" --clobber
 
   indice:
     needs: [lista, pais]
