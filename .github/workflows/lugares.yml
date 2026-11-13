@@ -1,0 +1,24 @@
+name: Lugares (prueba de tamaño)
+
+on:
+  workflow_dispatch:
+    inputs:
+      extracto:
+        description: 'Ruta del extracto en Geofabrik (p. ej. europe/spain)'
+        default: 'europe/spain'
+
+jobs:
+  medir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt-get install -y -qq osmium-tool >/dev/null
+          pip install -q shapely
+      - run: |
+          curl -sfL --retry 6 --retry-delay 60 --retry-all-errors -o pais.osm.pbf "https://download.geofabrik.de/${{ inputs.extracto }}-latest.osm.pbf"
+          osmium tags-filter -o l.osm.pbf pais.osm.pbf nwr/aeroway=aerodrome nwr/amenity=bar,bicycle_rental,bus_station,cafe,cinema,clinic,college,dive_centre,drinking_water,ferry_terminal,fire_station,fountain,fuel,grave_yard,hospital,library,monastery,pharmacy,place_of_worship,police,pub,restaurant,sanitary_dump_station,school,shelter,taxi,theatre,university nwr/archaeological_site=petroglyph,rock_art,rock_painting nwr/boundary=national_park,protected_area nwr/building=cathedral,monastery nwr/club=sport nwr/emergency=defibrillator nwr/healthcare=centre,pharmacy nwr/highway=rest_area,services nwr/historic=archaeological_site,castle,fort,memorial,monastery,monument,ruins nwr/industrial=port nwr/landuse=cemetery,winter_sports nwr/leisure=fitness_centre,marina,nature_reserve,park,pitch,skatepark,sports_centre,sports_hall,stadium,swimming_area,swimming_pool,water_park nwr/man_made=lighthouse,water_tap,water_well nwr/natural=beach,cave_entrance,spring,peak,volcano,hill nwr/railway=station nwr/shop=car_repair,scuba_diving,sports,supermarket,tyres nwr/sport=scuba_diving,surfing nwr/station=subway nwr/tourism=alpine_hut,artwork,attraction,camp_site,caravan_site,guest_house,hostel,hotel,motel,museum,picnic_site,viewpoint,wilderness_hut nwr/water=lake,reservoir nwr/waterway=waterfall nwr/place=village,town,city,hamlet 
+          osmium export l.osm.pbf -f geojsonseq -o l.geojsonseq --add-unique-id=type_id
+          ls -la l.osm.pbf l.geojsonseq
+          python3 lugares.py l.geojsonseq lugares.json.gz
+          ls -la lugares.json.gz
